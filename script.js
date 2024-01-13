@@ -1,85 +1,151 @@
-const chatbotToggler = document.querySelector(".chatbot-toggler");
-const closeBtn = document.querySelector(".close-btn");
-const chatbox = document.querySelector(".chatbox");
-const chatInput = document.querySelector(".chat-input textarea");
-const sendChatBtn = document.querySelector(".chat-input span");
+// MESSAGE INPUT
+const textarea = document.querySelector('.chatbox-message-input');
+const chatboxForm = document.querySelector('.chatbox-message-form');
 
-let userMessage = null; // Variable to store user's message
-const API_KEY = "PASTE-YOUR-API-KEY"; // Paste your API key here
-const inputInitHeight = chatInput.scrollHeight;
+let currentQuestionIndex = 0;
+let userResponses = [];
 
-const createChatLi = (message, className) => {
-    // Create a chat <li> element with passed message and className
-    const chatLi = document.createElement("li");
-    chatLi.classList.add("chat", `${className}`);
-    let chatContent = className === "outgoing" ? `<p></p>` : `<span class="material-symbols-outlined">smart_toy</span><p></p>`;
-    chatLi.innerHTML = chatContent;
-    chatLi.querySelector("p").textContent = message;
-    return chatLi; // return chat <li> element
-}
-
-const generateResponse = (chatElement) => {
-    const API_URL = "https://api.openai.com/v1/chat/completions";
-    const messageElement = chatElement.querySelector("p");
-
-    // Define the properties and message for the API request
-    const requestOptions = {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${API_KEY}`
-        },
-        body: JSON.stringify({
-            model: "gpt-3.5-turbo",
-            messages: [{role: "user", content: userMessage}],
-        })
-    }
-
-    // Send POST request to API, get response and set the reponse as paragraph text
-    fetch(API_URL, requestOptions).then(res => res.json()).then(data => {
-        messageElement.textContent = data.choices[0].message.content.trim();
-    }).catch(() => {
-        messageElement.classList.add("error");
-        messageElement.textContent = "Oops! Something went wrong. Please try again.";
-    }).finally(() => chatbox.scrollTo(0, chatbox.scrollHeight));
-}
-
-const handleChat = () => {
-    userMessage = chatInput.value.trim(); // Get user entered message and remove extra whitespace
-    if(!userMessage) return;
-
-    // Clear the input textarea and set its height to default
-    chatInput.value = "";
-    chatInput.style.height = `${inputInitHeight}px`;
-
-    // Append the user's message to the chatbox
-    chatbox.appendChild(createChatLi(userMessage, "outgoing"));
-    chatbox.scrollTo(0, chatbox.scrollHeight);
-    
-    setTimeout(() => {
-        // Display "Thinking..." message while waiting for the response
-        const incomingChatLi = createChatLi("Thinking...", "incoming");
-        chatbox.appendChild(incomingChatLi);
-        chatbox.scrollTo(0, chatbox.scrollHeight);
-        generateResponse(incomingChatLi);
-    }, 600);
-}
-
-chatInput.addEventListener("input", () => {
-    // Adjust the height of the input textarea based on its content
-    chatInput.style.height = `${inputInitHeight}px`;
-    chatInput.style.height = `${chatInput.scrollHeight}px`;
+document.addEventListener("DOMContentLoaded", function () {
+    autoReply("Bună! Cu ce te pot ajuta astăzi?");
 });
 
-chatInput.addEventListener("keydown", (e) => {
-    // If Enter key is pressed without Shift key and the window 
-    // width is greater than 800px, handle the chat
-    if(e.key === "Enter" && !e.shiftKey && window.innerWidth > 800) {
-        e.preventDefault();
-        handleChat();
+const botQuestions = [
+     "Buna ziua! Cum vă pot ajuta astăzi?",
+"Mulțumim pentru întrebarea ta! Echipa noastră este aici să te sprijine.",
+    "Dacă ești interesat/ă de ofertele noastre speciale sau ai alte întrebări, te rog să nu eziti să întrebi",
+    "De asemenea, vreau să te informez că unul dintre operatorii noștri amabili va lua legătura cu tine în curând pentru a-ți oferi asistența necesară. Îți dorim o zi minunată! 😊 ",
+"Îmi pare rău, momentan toți operatorii noștri sunt ocupați.Dacă ai nevoie de ajutor imediat, sună-ne la 0727159340",
+"Îți mulțumim pentru răbdare! 👷‍♂️👷‍♀️📞",
+    // Adaugă mai multe întrebări pentru bot aici
+];
+
+textarea.addEventListener('input', function () {
+    let line = textarea.value.split('\n').length;
+
+    if (textarea.rows < 6 || line < 6) {
+        textarea.rows = line;
+    }
+
+    if (textarea.rows > 1) {
+        chatboxForm.style.alignItems = 'flex-end';
+    } else {
+        chatboxForm.style.alignItems = 'center';
     }
 });
 
-sendChatBtn.addEventListener("click", handleChat);
-closeBtn.addEventListener("click", () => document.body.classList.remove("show-chatbot"));
-chatbotToggler.addEventListener("click", () => document.body.classList.toggle("show-chatbot"));
+// TOGGLE CHATBOX
+const chatboxToggle = document.querySelector('.chatbox-toggle');
+const chatboxMessage = document.querySelector('.chatbox-message-wrapper');
+
+chatboxToggle.addEventListener('click', function () {
+    chatboxMessage.classList.toggle('show');
+});
+
+// DROPDOWN TOGGLE
+const dropdownToggle = document.querySelector('.chatbox-message-dropdown-toggle');
+const dropdownMenu = document.querySelector('.chatbox-message-dropdown-menu');
+
+dropdownToggle.addEventListener('click', function () {
+    dropdownMenu.classList.toggle('show');
+});
+
+document.addEventListener('click', function (e) {
+    if (!e.target.matches('.chatbox-message-dropdown, .chatbox-message-dropdown *')) {
+        dropdownMenu.classList.remove('show');
+    }
+});
+
+// CHATBOX MESSAGE
+const chatboxMessageWrapper = document.querySelector('.chatbox-message-content');
+const chatboxNoMessage = document.querySelector('.chatbox-message-no-message');
+
+chatboxForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    if (isValid(textarea.value)) {
+        writeMessage();
+        setTimeout(autoReply, 1000);
+    }
+});
+
+function addZero(num) {
+    return num < 10 ? '0' + num : num;
+}
+
+function writeMessage() {
+    const today = new Date();
+    let message = `
+        <div class="chatbox-message-item sent">
+            <span class="chatbox-message-item-text">
+                ${textarea.value.trim().replace(/\n/g, '<br>\n')}
+            </span>
+            <span class="chatbox-message-item-time">${addZero(today.getHours())}:${addZero(today.getMinutes())}</span>
+        </div>
+    `;
+    chatboxMessageWrapper.insertAdjacentHTML('beforeend', message);
+    chatboxForm.style.alignItems = 'center';
+    textarea.rows = 1;
+    textarea.focus();
+    textarea.value = '';
+    chatboxNoMessage.style.display = 'none';
+    scrollBottom();
+}
+
+function autoReply() {
+    const today = new Date();
+    let message;
+
+    if (currentQuestionIndex < botQuestions.length) {
+        // Bot-ul pune întrebări
+        message = `
+            <div class="chatbox-message-item received">
+                <span class="chatbox-message-item-text">
+                    ${botQuestions[currentQuestionIndex]}
+                </span>
+                <span class="chatbox-message-item-time">${addZero(today.getHours())}:${addZero(today.getMinutes())}</span>
+            </div>
+        `;
+    } else {
+        // Bot-ul răspunde la întrebările tale
+        message = `
+            <div class="chatbox-message-item received">
+                <span class="chatbox-message-item-text">
+                    ${getBotResponse()}
+                </span>
+                <span class="chatbox-message-item-time">${addZero(today.getHours())}:${addZero(today.getMinutes())}</span>
+            </div>
+        `;
+    }
+
+    chatboxMessageWrapper.insertAdjacentHTML('beforeend', message);
+    currentQuestionIndex++;
+    scrollBottom();
+}
+
+function getBotResponse() {
+    // Aici poți adăuga logica pentru a genera răspunsurile bot-ului în funcție de răspunsurile tale anterioare.
+    // De exemplu, dacă ai răspuns cu un fruct, bot-ul poate răspunde cu un alt fruct, și tot așa.
+
+    // În exemplu simplu, vom folosi un array fix de răspunsuri pentru demonstrație.
+    const responses = [
+        "Vom răspunde imediat. O zi frumoasă!.",
+        // Adaugă mai multe răspunsuri ale bot-ului aici
+    ];
+
+    if (userResponses.length < responses.length) {
+        return responses[userResponses.length];
+    } else {
+        return "Nu știu ce să mai spun. Ai răspunsuri interesante!";
+    }
+}
+
+function scrollBottom() {
+    chatboxMessageWrapper.scrollTo(0, chatboxMessageWrapper.scrollHeight);
+}
+
+function isValid(value) {
+    let text = value.replace(/\n/g, '');
+    text = text.replace(/\s/g, '');
+
+    return text.length > 0;
+}
